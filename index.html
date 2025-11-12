@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8" />
-<title>Diamond Chess — A8 top, H1 bottom (−45°, S/√2 spacing)</title>
+<title>Diamond Chess — A8 top, H1 bottom (axis-aligned diamond)</title>
 <style>
   :root{--bg:#0e0f12;--light:#e9edf1;--dark:#12161f;--accent:#35c1a6}
   html,body{height:100%;margin:0;background:var(--bg);color:#e9edf1;font:14px/1.35 system-ui,Segoe UI,Roboto,Helvetica,Arial}
@@ -41,7 +41,8 @@ document.getElementById("flip").onclick  = ()=>{ flipped = !flipped; render(); }
 // Board constants
 const files = "abcdefgh";
 const S = 64;                            // side length of each TRUE square
-const STEP = S / Math.SQRT2;             // <-- correct center spacing for 45° rotation
+const STEP_X = S;                        // horizontal spacing for the diamond fan-out
+const STEP_Y = S / 2;                    // vertical spacing for staggered rows
 const CENTER_Y = 0;                      // base vertical center; we’ll translate with boardCenterY
 const boardCenterY = 360;                // visual nudging so diamond is centered
 
@@ -61,16 +62,19 @@ function fromSq(s){ return [files.indexOf(s[0]), parseInt(s[1],10)-1]; }
 /*
 Layout that matches your image:
 
-Row (vertical) index = f - r   → puts A8 at the top, H1 at the bottom.
-Column (horizontal)  = f + r   → row lengths go 1..8..1.
+Diagonal index  = f + r  → row lengths go 1..8..1.
+Anti-diagonal   = f - r  → places A8 at the top, H1 at the bottom.
 
-We place centers using STEP = S/√2 so −45° squares touch neatly.
+We keep tiles axis-aligned and spread their centres across a diamond using
+independent horizontal/vertical steps.
 */
 function centerFor(f, r) {
   const F = flipped ? 7 - f : f;
   const R = flipped ? 7 - r : r;
-  const x = (F + R - 7) * STEP;
-  const y = (F - R) * STEP + boardCenterY + CENTER_Y;
+  const diag = F + R;
+  const anti = F - R;
+  const x = (diag - 7) * (STEP_X / 2);
+  const y = (anti) * STEP_Y + boardCenterY + CENTER_Y;
   return [x, y];
 }
 
@@ -86,7 +90,6 @@ function drawTile(g, f, r){
   rect.setAttribute("fill", light ? "#e9edf1" : "#1a2030");
   rect.setAttribute("stroke", light ? "#cbd5e1" : "#2b3242");
   rect.setAttribute("stroke-width", 1.2);
-  rect.setAttribute("transform", `rotate(-45 ${cx} ${cy})`); // rotate each square −45°
   rect.style.cursor = "pointer";
 
   const sq = toSq(f,r);

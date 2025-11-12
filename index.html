@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8" />
-<title>Diamond Chess — A8 top, H1 bottom (−45°, S/√2 spacing)</title>
+<title>Diamond Chess — A8 top, H1 bottom (axis-aligned diamond)</title>
 <style>
   :root{--bg:#0e0f12;--light:#e9edf1;--dark:#12161f;--accent:#35c1a6}
   html,body{height:100%;margin:0;background:var(--bg);color:#e9edf1;font:14px/1.35 system-ui,Segoe UI,Roboto,Helvetica,Arial}
@@ -41,7 +41,9 @@ document.getElementById("flip").onclick  = ()=>{ flipped = !flipped; render(); }
 // Board constants
 const files = "abcdefgh";
 const S = 64;                            // side length of each TRUE square
-const STEP = S / Math.SQRT2;             // <-- correct center spacing for 45° rotation
+const STEP_X = S;                        // tighten diagonal spacing so neighbouring tiles share an edge with no gap
+const STEP_Y = S;                        // keep anti-diagonal spacing symmetrical to avoid overlap vertically
+const HALF_STEP_X = STEP_X / 2;          // convenience so we don’t keep dividing in centerFor
 const CENTER_Y = 0;                      // base vertical center; we’ll translate with boardCenterY
 const boardCenterY = 360;                // visual nudging so diamond is centered
 
@@ -61,16 +63,19 @@ function fromSq(s){ return [files.indexOf(s[0]), parseInt(s[1],10)-1]; }
 /*
 Layout that matches your image:
 
-Row (vertical) index = f - r   → puts A8 at the top, H1 at the bottom.
-Column (horizontal)  = f + r   → row lengths go 1..8..1.
+Diagonal index  = f + r  → row lengths go 1..8..1.
+Anti-diagonal   = f - r  → places A8 at the top, H1 at the bottom.
 
-We place centers using STEP = S/√2 so −45° squares touch neatly.
+We keep tiles axis-aligned and spread their centres across a diamond using
+independent horizontal/vertical steps.
 */
 function centerFor(f, r) {
   const F = flipped ? 7 - f : f;
   const R = flipped ? 7 - r : r;
-  const x = (F + R - 7) * STEP;
-  const y = (F - R) * STEP + boardCenterY + CENTER_Y;
+  const diag = F + R;
+  const anti = F - R;
+  const x = (diag - 7) * HALF_STEP_X;
+  const y = (-anti) * STEP_Y + boardCenterY + CENTER_Y;
   return [x, y];
 }
 
@@ -86,7 +91,6 @@ function drawTile(g, f, r){
   rect.setAttribute("fill", light ? "#e9edf1" : "#1a2030");
   rect.setAttribute("stroke", light ? "#cbd5e1" : "#2b3242");
   rect.setAttribute("stroke-width", 1.2);
-  rect.setAttribute("transform", `rotate(-45 ${cx} ${cy})`); // rotate each square −45°
   rect.style.cursor = "pointer";
 
   const sq = toSq(f,r);
@@ -156,8 +160,13 @@ function render(){
   drawHighlights(gH);
 
   const b = game.board();
-  for(let r=0;r<8;r++) for(let f=0;f<8;f++){
-    const p = b[r][f]; if (p) drawPiece(gP, toSq(f,r), p);
+  for(let rawR=0;rawR<8;rawR++){
+    const boardR = 7 - rawR;             // chess.js gives ranks 8→1; convert to our 0→7 from bottom
+    for(let f=0;f<8;f++){
+      const p = b[rawR][f];
+      if (!p) continue;
+      drawPiece(gP, toSq(f, boardR), p);
+    }
   }
 
   svg.appendChild(gT); svg.appendChild(gH); svg.appendChild(gP);

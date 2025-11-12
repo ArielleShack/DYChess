@@ -1,0 +1,203 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Diamond Chess — A8 top, H1 bottom (−45°, S/√2 spacing)</title>
+<style>
+  :root{--bg:#0e0f12;--light:#e9edf1;--dark:#12161f;--accent:#35c1a6}
+  html,body{height:100%;margin:0;background:var(--bg);color:#e9edf1;font:14px/1.35 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  #wrap{display:grid;grid-template-columns:1fr 300px;gap:16px;height:100vh;padding:16px;box-sizing:border-box}
+  #board{width:100%;height:100%}
+  aside{display:flex;flex-direction:column;gap:10px}
+  button{background:#1b2030;color:#e9edf1;border:1px solid #2a3040;padding:8px 10px;border-radius:10px;cursor:pointer}
+  .pill{background:#1b2030;border:1px solid #2a3040;border-radius:999px;padding:3px 8px}
+  .list{flex:1;min-height:0;overflow:auto;background:#0f131b;border:1px solid #22293a;border-radius:12px;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .mv:nth-child(odd){background:#131825;border-radius:8px;padding:4px 6px}
+  .legend{font-size:10px;fill:#95a2b7;pointer-events:none}
+</style>
+
+<div id="wrap">
+  <svg id="board" viewBox="-520 -220 1040 1200" preserveAspectRatio="xMidYMid meet"></svg>
+  <aside>
+    <div>
+      <button id="reset">New game</button>
+      <button id="flip">Flip view</button>
+      <span id="turn" class="pill">Turn: white</span>
+    </div>
+    <div id="status">Ready.</div>
+    <div class="list" id="history"></div>
+  </aside>
+</div>
+
+<script type="module">
+import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/esm/chess.js";
+
+// UI refs
+const svg = document.getElementById("board");
+const uiTurn = document.getElementById("turn");
+const uiStatus = document.getElementById("status");
+const uiHist = document.getElementById("history");
+document.getElementById("reset").onclick = ()=>{ game = new Chess(); selected=null; highlights.clear(); render(); };
+document.getElementById("flip").onclick  = ()=>{ flipped = !flipped; render(); };
+
+// Board constants
+const files = "abcdefgh";
+const S = 64;                            // side length of each TRUE square
+const STEP = S / Math.SQRT2;             // <-- correct center spacing for 45° rotation
+const CENTER_Y = 0;                      // base vertical center; we’ll translate with boardCenterY
+const boardCenterY = 360;                // visual nudging so diamond is centered
+
+let game = new Chess();
+let flipped = false;
+let selected = null;
+let highlights = new Set();
+
+const GLYPH = {
+  w:{p:"♙",r:"♖",n:"♘",b:"♗",q:"♕",k:"♔"},
+  b:{p:"♟",r:"♜",n:"♞",b:"♝",q:"♛",k:"♚"}
+};
+
+function toSq(f,r){ return files[f] + (r+1); }
+function fromSq(s){ return [files.indexOf(s[0]), parseInt(s[1],10)-1]; }
+
+/*
+Layout that matches your image:
+
+Row (vertical) index = f - r   → puts A8 at the top, H1 at the bottom.
+Column (horizontal)  = f + r   → row lengths go 1..8..1.
+
+We place centers using STEP = S/√2 so −45° squares touch neatly.
+*/
+function centerFor(f, r) {
+  const F = flipped ? 7 - f : f;
+  const R = flipped ? 7 - r : r;
+  const x = (F + R - 7) * STEP;
+  const y = (F - R) * STEP + boardCenterY + CENTER_Y;
+  return [x, y];
+}
+
+function drawTile(g, f, r){
+  const [cx,cy] = centerFor(f,r);
+  const light = (f + r) % 2 === 0;
+
+  const rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
+  rect.setAttribute("x", cx - S/2);
+  rect.setAttribute("y", cy - S/2);
+  rect.setAttribute("width", S);
+  rect.setAttribute("height", S);
+  rect.setAttribute("fill", light ? "#e9edf1" : "#1a2030");
+  rect.setAttribute("stroke", light ? "#cbd5e1" : "#2b3242");
+  rect.setAttribute("stroke-width", 1.2);
+  rect.setAttribute("transform", `rotate(-45 ${cx} ${cy})`); // rotate each square −45°
+  rect.style.cursor = "pointer";
+
+  const sq = toSq(f,r);
+  rect.addEventListener("click", ()=> onSquareClick(sq));
+  g.appendChild(rect);
+
+  // tiny labels like A8, B7, etc (so you can verify the shape quickly)
+  const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+  t.setAttribute("class","legend");
+  t.setAttribute("x", cx - 16);
+  t.setAttribute("y", cy + 4);
+  t.textContent = files[f].toUpperCase() + (r+1);
+  g.appendChild(t);
+}
+
+function drawPiece(g, sq, piece){
+  const [f,r] = fromSq(sq);
+  const [cx,cy] = centerFor(f,r);
+  const text = document.createElementNS("http://www.w3.org/2000/svg","text");
+  text.textContent = GLYPH[piece.color][piece.type];
+  text.setAttribute("font-size","46");
+  text.setAttribute("text-anchor","middle");
+  text.setAttribute("dominant-baseline","central");
+  text.setAttribute("x", cx);
+  text.setAttribute("y", cy+1);
+  text.style.cursor = "pointer";
+  text.addEventListener("click", (e)=>{ e.stopPropagation(); onSquareClick(sq); });
+  g.appendChild(text);
+}
+
+function drawHighlights(g){
+  for(const sq of highlights){
+    const [f,r] = fromSq(sq);
+    const [cx,cy] = centerFor(f,r);
+    const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("cx", cx);
+    c.setAttribute("cy", cy);
+    c.setAttribute("r", 11);
+    c.setAttribute("fill","none");
+    c.setAttribute("stroke","#35c1a6");
+    c.setAttribute("stroke-width","3");
+    g.appendChild(c);
+  }
+}
+
+function render(){
+  svg.innerHTML = "";
+
+  // Optional: draw a faint outer diamond frame to confirm geometry
+  const frame = document.createElementNS("http://www.w3.org/2000/svg","polygon");
+  const top    = centerFor(0,7); // A8
+  const right  = centerFor(7,7); // H8
+  const bottom = centerFor(7,0); // H1
+  const left   = centerFor(0,0); // A1
+  frame.setAttribute("points", `${top[0]},${top[1]} ${right[0]},${right[1]} ${bottom[0]},${bottom[1]} ${left[0]},${left[1]}`);
+  frame.setAttribute("fill","none");
+  frame.setAttribute("stroke","#2b3242");
+  frame.setAttribute("stroke-width","2");
+  frame.setAttribute("opacity","0.35");
+  svg.appendChild(frame);
+
+  const gT = document.createElementNS("http://www.w3.org/2000/svg","g");
+  const gH = document.createElementNS("http://www.w3.org/2000/svg","g");
+  const gP = document.createElementNS("http://www.w3.org/2000/svg","g");
+
+  for(let r=0;r<8;r++) for(let f=0;f<8;f++) drawTile(gT,f,r);
+  drawHighlights(gH);
+
+  const b = game.board();
+  for(let r=0;r<8;r++) for(let f=0;f<8;f++){
+    const p = b[r][f]; if (p) drawPiece(gP, toSq(f,r), p);
+  }
+
+  svg.appendChild(gT); svg.appendChild(gH); svg.appendChild(gP);
+
+  // UI
+  uiTurn.textContent = "Turn: " + (game.turn()==="w" ? "white" : "black");
+  uiStatus.textContent = game.isGameOver()
+    ? (game.isCheckmate() ? "Game over: checkmate."
+      : game.isStalemate() ? "Game over: stalemate."
+      : game.isDraw() ? "Game over: draw." : "Game over.")
+    : "Ready.";
+
+  const hist = game.history({verbose:true});
+  uiHist.innerHTML = hist.map((m,i)=>{
+    const num = Math.floor(i/2)+1;
+    const head = m.color==="w" ? `${num}. ${m.san}` : m.san;
+    return `<div class="mv"><span>${head}</span><span class="pill">${m.from}→${m.to}</span></div>`;
+  }).join("");
+}
+
+function legalTo(sq){ return game.moves({square:sq, verbose:true}).map(m=>m.to); }
+
+function onSquareClick(sq){
+  if (selected){
+    const legal = legalTo(selected);
+    if (legal.includes(sq)){
+      let mv = { from:selected, to:sq, promotion:"q" };
+      const needPromo = game.moves({square:selected, verbose:true}).some(m=>m.to===sq && m.promotion);
+      if (needPromo){
+        const p = prompt("Promote to: q r b n","q"); if (!p) return;
+        mv.promotion = p.toLowerCase();
+      }
+      game.move(mv); selected=null; highlights.clear(); render(); return;
+    }
+  }
+  const p = game.get(sq);
+  if (p && p.color===game.turn()){ selected=sq; highlights=new Set(legalTo(sq)); }
+  else { selected=null; highlights.clear(); }
+  render();
+}
+
+render();
+</script>

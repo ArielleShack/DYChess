@@ -41,9 +41,8 @@ document.getElementById("flip").onclick  = ()=>{ flipped = !flipped; render(); }
 // Board constants
 const files = "abcdefgh";
 const S = 64;                            // side length of each TRUE square
-const STEP_X = S * 2;                    // diagonal spacing so neighbouring tiles only meet at a single corner
-const STEP_Y = S;                        // anti-diagonal spacing for the same corner-only contact vertically
-const HALF_STEP_X = STEP_X / 2;          // convenience so we don’t keep dividing in centerFor
+const STEP_X = S;                        // horizontal spacing for the diamond fan-out
+const STEP_Y = S / 2;                    // vertical spacing for staggered rows
 const CENTER_Y = 0;                      // base vertical center; we’ll translate with boardCenterY
 const boardCenterY = 360;                // visual nudging so diamond is centered
 
@@ -74,7 +73,7 @@ function centerFor(f, r) {
   const R = flipped ? 7 - r : r;
   const diag = F + R;
   const anti = F - R;
-  const x = (diag - 7) * HALF_STEP_X;
+  const x = (diag - 7) * (STEP_X / 2);
   const y = (anti) * STEP_Y + boardCenterY + CENTER_Y;
   return [x, y];
 }

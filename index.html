@@ -41,9 +41,8 @@ document.getElementById("flip").onclick  = ()=>{ flipped = !flipped; render(); }
 // Board constants
 const files = "abcdefgh";
 const S = 64;                            // side length of each TRUE square
-const STEP_X = S;                        // tighten diagonal spacing so neighbouring tiles share an edge with no gap
-const STEP_Y = S;                        // keep anti-diagonal spacing symmetrical to avoid overlap vertically
-const HALF_STEP_X = STEP_X / 2;          // convenience so we don’t keep dividing in centerFor
+const STEP_SUM = S / 2;                  // horizontal shift for each change in (file + rank)
+const STEP_DIFF = S;                     // vertical shift for each change in (file - rank)
 const CENTER_Y = 0;                      // base vertical center; we’ll translate with boardCenterY
 const boardCenterY = 360;                // visual nudging so diamond is centered
 
@@ -61,21 +60,23 @@ function toSq(f,r){ return files[f] + (r+1); }
 function fromSq(s){ return [files.indexOf(s[0]), parseInt(s[1],10)-1]; }
 
 /*
-Layout that matches your image:
+Layout that keeps the tiles axis-aligned while letting the anti-diagonals form
+the 15 horizontal rows of the diamond:
 
-Diagonal index  = f + r  → row lengths go 1..8..1.
-Anti-diagonal   = f - r  → places A8 at the top, H1 at the bottom.
+sum  = f + r  → shifts us left/right across those rows (1 → 8 → 1 tiles).
+diff = f - r  → pushes us up/down so A8 sits at the top and H1 at the bottom.
 
-We keep tiles axis-aligned and spread their centres across a diamond using
-independent horizontal/vertical steps.
+Two orthogonal step sizes are enough: STEP_SUM for the horizontal skew and
+STEP_DIFF for the vertical separation. Squares that share the same (f - r)
+line up along a row and now touch edge-to-edge instead of only at the corners.
 */
 function centerFor(f, r) {
   const F = flipped ? 7 - f : f;
   const R = flipped ? 7 - r : r;
-  const diag = F + R;
-  const anti = F - R;
-  const x = (diag - 7) * HALF_STEP_X;
-  const y = (-anti) * STEP_Y + boardCenterY + CENTER_Y;
+  const sum = F + R;
+  const diff = F - R;
+  const x = (sum - 7) * STEP_SUM;
+  const y = diff * STEP_DIFF + boardCenterY + CENTER_Y;
   return [x, y];
 }
 
